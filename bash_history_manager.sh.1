@@ -1,0 +1,135 @@
+#!/usr/bin/env bash
+# Script para gerenciar histórico do bash em SQLite
+
+DB_FILE="$HOME/.bash_history.db"
+
+# Função para criar o banco de dados
+create_db() {
+    sqlite3 "$DB_FILE" <<EOF
+CREATE TABLE IF NOT EXISTS commands (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    command TEXT NOT NULL,
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+    working_dir TEXT,
+    user TEXT,
+    hostname TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_command ON commands(command);
+CREATE INDEX IF NOT EXISTS idx_timestamp ON commands(timestamp);
+CREATE INDEX IF NOT EXISTS idx_working_dir ON commands(working_dir);
+EOF
+    echo "Banco de dados criado em: $DB_FILE"
+}
+
+# Função para importar histórico existente
+import_history() {
+    echo "Importando histórico existente..."
+    local count=0
+
+    while IFS= read -r cmd; do
+        # Ignora linhas vazias
+        [[ -z "$cmd" ]] && continue
+
+        # Escapa aspas simples
+        cmd=$(echo "$cmd" | sed "s/'/''/g")
+
+        sqlite3 "$DB_FILE" "INSERT INTO commands (command, user, hostname) VALUES ('$cmd', '$USER', '$HOSTNAME');"
+        ((count++))
+    done <"$HOME/.bash_history"
+
+    echo "Importados $count comandos"
+}
+
+# Função para adicionar comando atual
+add_command() {
+    local cmd="$1"
+    [[ -z "$cmd" ]] && return
+
+    # Escapa aspas simples
+    cmd=$(echo "$cmd" | sed "s/'/''/g")
+
+    sqlite3 "$DB_FILE" "INSERT INTO commands (command, working_dir, user, hostname) VALUES ('$cmd', '$PWD', '$USER', '$HOSTNAME');"
+}
+
+# Função para buscar no histórico
+search_history() {
+    local query="$1"
+
+    if [[ -z "$query" ]]; then
+        echo "Últimos 20 comandos:"
+        sqlite3 -column -header "$DB_FILE" "SELECT id, datetime(timestamp, 'localtime') as time, command FROM commands ORDER BY id DESC LIMIT 20;"
+    else
+        echo "Buscando por: $query"
+        sqlite3 -column -header "$DB_FILE" "SELECT id, datetime(timestamp, 'localtime') as time, command FROM commands WHERE command LIKE '%$query%' ORDER BY id DESC LIMIT 50;"
+    fi
+}
+
+# Função para estatísticas
+stats() {
+    echo "=== Estatísticas do Histórico ==="
+    echo ""
+    echo "Total de comandos:"
+    sqlite3 "$DB_FILE" "SELECT COUNT(*) FROM commands;"
+    echo ""
+    echo "Top 10 comandos mais usados:"
+    sqlite3 -column -header "$DB_FILE" "SELECT command, COUNT(*) as count FROM commands GROUP BY command ORDER BY count DESC LIMIT 10;"
+    echo ""
+    echo "Comandos por dia (últimos 7 dias):"
+    sqlite3 -column -header "$DB_FILE" "SELECT DATE(timestamp) as date, COUNT(*) as count FROM commands WHERE timestamp >= datetime('now', '-7 days') GROUP BY DATE(timestamp) ORDER BY date DESC;"
+}
+
+# Função para limpar duplicatas
+clean_duplicates() {
+    echo "Removendo comandos duplicados consecutivos..."
+    sqlite3 "$DB_FILE" <<EOF
+DELETE FROM commands
+WHERE id NOT IN (
+    SELECT MIN(id)
+    FROM commands
+    GROUP BY command, DATE(timestamp)
+);
+EOF
+    echo "Limpeza concluída"
+}
+
+# Menu principal
+case "$1" in
+    init)
+        create_db
+        import_history
+        ;;
+    search | s)
+        search_history "$2"
+        ;;
+    add)
+        add_command "$2"
+        ;;
+    stats)
+        stats
+        ;;
+    clean)
+        clean_duplicates
+        ;;
+    export)
+        echo "Exportando histórico para bash_history_export.txt..."
+        sqlite3 "$DB_FILE" "SELECT command FROM commands ORDER BY id;" >bash_history_export.txt
+        echo "Exportado para bash_history_export.txt"
+        ;;
+    *)
+        echo "Uso: $0 {init|search|add|stats|clean|export}"
+        echo ""
+        echo "Comandos:"
+        echo "  init              - Cria banco e importa histórico existente"
+        echo "  search [termo]    - Busca comandos (sem termo = últimos 20)"
+        echo "  add 'comando'     - Adiciona comando manualmente"
+        echo "  stats             - Mostra estatísticas"
+        echo "  clean             - Remove duplicatas"
+        echo "  export            - Exporta para arquivo texto"
+        echo ""
+        echo "Exemplos:"
+        echo "  $0 init"
+        echo "  $0 search git"
+        echo "  $0 search"
+        echo "  $0 stats"
+        ;;
+esac

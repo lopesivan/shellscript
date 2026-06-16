@@ -1,0 +1,21 @@
+export IDEA_VM_OPTIONS="${HOME}/jetbra/vmoptions/idea.vmoptions"
+export CLION_VM_OPTIONS="${HOME}/jetbra/vmoptions/clion.vmoptions"
+export PHPSTORM_VM_OPTIONS="${HOME}/jetbra/vmoptions/phpstorm.vmoptions"
+export GOLAND_VM_OPTIONS="${HOME}/jetbra/vmoptions/goland.vmoptions"
+export PYCHARM_VM_OPTIONS="${HOME}/jetbra/vmoptions/pycharm.vmoptions"
+export WEBSTORM_VM_OPTIONS="${HOME}/jetbra/vmoptions/webstorm.vmoptions"
+export WEBIDE_VM_OPTIONS="${HOME}/jetbra/vmoptions/webide.vmoptions"
+export RIDER_VM_OPTIONS="${HOME}/jetbra/vmoptions/rider.vmoptions"
+export DATAGRIP_VM_OPTIONS="${HOME}/jetbra/vmoptions/datagrip.vmoptions"
+export RUBYMINE_VM_OPTIONS="${HOME}/jetbra/vmoptions/rubymine.vmoptions"
+export DATASPELL_VM_OPTIONS="${HOME}/jetbra/vmoptions/dataspell.vmoptions"
+export AQUA_VM_OPTIONS="${HOME}/jetbra/vmoptions/aqua.vmoptions"
+export RUSTROVER_VM_OPTIONS="${HOME}/jetbra/vmoptions/rustrover.vmoptions"
+export GATEWAY_VM_OPTIONS="${HOME}/jetbra/vmoptions/gateway.vmoptions"
+export JETBRAINS_CLIENT_VM_OPTIONS="${HOME}/jetbra/vmoptions/jetbrains_client.vmoptions"
+export JETBRAINSCLIENT_VM_OPTIONS="${HOME}/jetbra/vmoptions/jetbrainsclient.vmoptions"
+export STUDIO_VM_OPTIONS="${HOME}/jetbra/vmoptions/studio.vmoptions"
+export DEVECOSTUDIO_VM_OPTIONS="${HOME}/jetbra/vmoptions/devecostudio.vmoptions"
+
+# DEBUG ON
+[ "$SCRIPT_DEBUG_ON" ] && echo load file: jbrain.sh

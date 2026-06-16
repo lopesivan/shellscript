@@ -1,0 +1,43 @@
+# Defina a variável mode, você pode passar um argumento ou definir diretamente
+#mode=1
+mode=2
+
+if [[ "$mode" == "1" ]]; then
+	# Modo 1
+	#echo "Modo 1 ativo"
+
+	dir_target=$HOME/.config/luarock/3.11.1/bin
+	if [[ -d "$dir_target" ]]; then
+		export PATH=$dir_target:$PATH
+	fi
+
+	eval "$(luarocks path --bin)"
+	eval "$(luarocks completion bash)"
+	export LUA_PATH='/home/ivan/.config/luarock/3.11.1/share/lua/5.4/?.lua;/home/ivan/.luarocks/share/lua/5.4/?.lua;/home/ivan/.luarocks/share/lua/5.4/?/init.lua;/home/ivan/.config/luarock/3.11.1/share/lua/5.4/?/init.lua'
+	export LUA_CPATH='/home/ivan/.luarocks/lib/lua/5.4/?.so;/home/ivan/.config/luarock/3.11.1/lib/lua/5.4/?.so'
+else
+	# Modo 2
+	#echo "Modo 2 ativo"
+	dir_target=$HOME/.luaenv/bin
+	if [[ -d "$dir_target" ]]; then
+		export PATH=$dir_target:$PATH
+	fi
+
+	eval "$(luaenv init -)"
+
+	dir_target=$HOME/.config/luarock/2.4.3/bin
+	if [[ -d "$dir_target" ]]; then
+		export PATH=$dir_target:$PATH
+	fi
+
+	export LUA_PATH='/home/ivan/.luarocks/share/lua/5.1/?.lua;/home/ivan/.luarocks/share/lua/5.1/?/init.lua;/home/ivan/.config/luarock/2.4.3/share/lua/5.1/?.lua;/home/ivan/.config/luarock/2.4.3/share/lua/5.1/?/init.lua'
+	export LUA_CPATH='/home/ivan/.luarocks/lib/lua/5.1/?.so;/home/ivan/.config/luarock/2.4.3/lib/lua/5.1/?.so'
+
+	# Mostrando a instalacao:
+	# luarocks install numlua FFTW3_DIR=/home/linuxbrew/.linuxbrew/Cellar/fftw/3.3.10_1 HDF5_DIR=/home/linuxbrew/.linuxbrew/Cellar/hdf5/1.14.4.3
+fi
+
+[ $SCRIPT_DEBUG_ON ] && {
+	echo load file: lua.sh
+	luarocks --version
+}

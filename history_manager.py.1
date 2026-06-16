@@ -1,0 +1,487 @@
+#!/usr/bin/env python3
+"""
+Gerenciador de Histórico do Bash com SQLite
+Armazena comandos únicos sem limite de 1000 linhas
+"""
+
+import sqlite3
+import sys
+import os
+from pathlib import Path
+from typing import List, Optional
+import argparse
+from datetime import datetime
+
+
+class HistoryManager:
+    def __init__(self, db_path: Optional[str] = None):
+        """Inicializa o gerenciador de histórico"""
+        if db_path is None:
+            db_path = str(Path.home() / ".bash_history.db")
+
+        self.db_path = db_path
+        self.conn = None
+        self.history_file = Path.home() / ".bash_history"
+
+    def __enter__(self):
+        """Context manager para gerenciar conexão"""
+        self.conn = sqlite3.connect(self.db_path)
+        self.conn.row_factory = sqlite3.Row
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Fecha conexão ao sair"""
+        if self.conn:
+            self.conn.close()
+
+    def create_db(self):
+        """Cria a tabela se não existir"""
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS commands (
+                command TEXT PRIMARY KEY NOT NULL,
+                first_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        self.conn.commit()
+        print(f"✓ Banco de dados criado/verificado: {self.db_path}")
+
+    def add_command(self, command: str, update_last_seen: bool = True) -> bool:
+        """
+        Adiciona um comando ao banco
+
+        Args:
+            command: Comando a ser adicionado
+            update_last_seen: Se True, atualiza last_seen em caso de duplicata
+
+        Returns:
+            True se comando foi adicionado, False se já existia
+        """
+        command = command.strip()
+
+        # Ignora comandos vazios ou muito curtos
+        if not command or len(command) < 2:
+            return False
+
+        # Ignora comandos que começam com espaço (feature do bash para não salvar)
+        if command.startswith(' '):
+            return False
+
+        cursor = self.conn.cursor()
+
+        try:
+            if update_last_seen:
+                # Tenta inserir, se já existir, atualiza last_seen
+                cursor.execute("""
+                    INSERT INTO commands (command, first_seen, last_seen)
+                    VALUES (?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                    ON CONFLICT(command) DO UPDATE SET last_seen=CURRENT_TIMESTAMP
+                """, (command,))
+            else:
+                # Apenas tenta inserir, ignora se já existir
+                cursor.execute("""
+                    INSERT OR IGNORE INTO commands (command) VALUES (?)
+                """, (command,))
+
+            self.conn.commit()
+            return cursor.rowcount > 0
+
+        except sqlite3.Error as e:
+            print(f"✗ Erro ao adicionar comando: {e}", file=sys.stderr)
+            return False
+
+    def search_with_timestamps(self, query: Optional[str] = None, limit: int = 50) -> List[tuple]:
+        """
+        Busca comandos retornando também os timestamps
+
+        Returns:
+            Lista de tuplas (last_seen, command)
+        """
+        cursor = self.conn.cursor()
+
+        if query is None or query.strip() == "":
+            cursor.execute("""
+                SELECT command, last_seen FROM commands
+                ORDER BY last_seen DESC
+                LIMIT ?
+            """, (limit,))
+        else:
+            cursor.execute("""
+                SELECT command, last_seen FROM commands
+                WHERE command LIKE ?
+                ORDER BY last_seen DESC
+                LIMIT ?
+            """, (f'%{query}%', limit))
+
+        return [(row['last_seen'], row['command']) for row in cursor.fetchall()]
+
+    def import_history(self, verbose: bool = True) -> tuple[int, int]:
+        """
+        Importa comandos do .bash_history
+
+        Returns:
+            Tupla (total_processado, novos_adicionados)
+        """
+        if not self.history_file.exists():
+            print(f"✗ Arquivo não encontrado: {self.history_file}")
+            return (0, 0)
+
+        total = 0
+        added = 0
+
+        try:
+            with open(self.history_file, 'r', encoding='utf-8', errors='ignore') as f:
+                for line in f:
+                    command = line.strip()
+                    if command:
+                        total += 1
+                        if self.add_command(command, update_last_seen=False):
+                            added += 1
+
+            self.conn.commit()
+
+            if verbose:
+                print(f"✓ Processados: {total} comandos")
+                print(f"✓ Novos adicionados: {added}")
+                print(f"✓ Total único no banco: {self.count()}")
+
+            return (total, added)
+
+        except Exception as e:
+            print(f"✗ Erro ao importar histórico: {e}", file=sys.stderr)
+            return (0, 0)
+
+    def search(self, query: Optional[str] = None, limit: int = 50) -> List[str]:
+        """
+        Busca comandos no banco
+
+        Args:
+            query: Termo de busca (None = mostra últimos)
+            limit: Número máximo de resultados
+
+        Returns:
+            Lista de comandos encontrados
+        """
+        cursor = self.conn.cursor()
+
+        if query is None or query.strip() == "":
+            cursor.execute("""
+                SELECT command FROM commands
+                ORDER BY last_seen DESC
+                LIMIT ?
+            """, (limit,))
+        else:
+            cursor.execute("""
+                SELECT command FROM commands
+                WHERE command LIKE ?
+                ORDER BY last_seen DESC
+                LIMIT ?
+            """, (f'%{query}%', limit))
+
+        return [row['command'] for row in cursor.fetchall()]
+
+    def list_commands(self, limit: int = 50, reverse: bool = True) -> List[tuple]:
+        cursor = self.conn.cursor()
+        order = "DESC" if reverse else "ASC"
+        cursor.execute(f"""
+            SELECT first_seen, command FROM commands
+            ORDER BY last_seen {order}   -- era first_seen, muda pra last_seen
+            LIMIT ?
+        """, (limit,))
+        results = cursor.fetchall()
+        return [(row['first_seen'], row['command']) for row in results]
+
+    # def list_commands(self, limit: int = 50, reverse: bool = True) -> List[tuple]:
+    #     """
+    #     Lista comandos na ordem de inserção (first_seen)
+
+    #     Args:
+    #         limit: Número máximo de resultados
+    #         reverse: Se True, mostra os mais recentes primeiro (DESC)
+
+    #     Returns:
+    #         Lista de tuplas (first_seen, command)
+    #     """
+    #     cursor = self.conn.cursor()
+
+    #     order = "DESC" if reverse else "ASC"
+    #     cursor.execute(f"""
+    #         SELECT first_seen, command FROM commands
+    #         ORDER BY first_seen {order}
+    #         LIMIT ?
+    #     """, (limit,))
+
+    #     results = cursor.fetchall()
+    #     return [(row['first_seen'], row['command']) for row in results]
+
+    def search_regex(self, pattern: str, limit: int = 50) -> List[str]:
+        """Busca usando expressão regular (SQLite REGEXP)"""
+        cursor = self.conn.cursor()
+
+        # SQLite não tem REGEXP por padrão, usa LIKE mais sofisticado
+        cursor.execute("""
+            SELECT command FROM commands
+            WHERE command LIKE ?
+            ORDER BY last_seen DESC
+            LIMIT ?
+        """, (f'%{pattern}%', limit))
+
+        return [row['command'] for row in cursor.fetchall()]
+
+    def count(self) -> int:
+        """Retorna o total de comandos únicos"""
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT COUNT(*) as total FROM commands")
+        return cursor.fetchone()['total']
+
+    def stats(self):
+        """Mostra estatísticas do banco"""
+        cursor = self.conn.cursor()
+
+        print("\n" + "="*60)
+        print("ESTATÍSTICAS DO HISTÓRICO")
+        print("="*60)
+
+        # Total
+        total = self.count()
+        print(f"\n📊 Total de comandos únicos: {total:,}")
+
+        # Comandos mais antigos e mais recentes
+        cursor.execute("""
+            SELECT command, first_seen
+            FROM commands
+            ORDER BY first_seen ASC
+            LIMIT 1
+        """)
+        oldest = cursor.fetchone()
+        if oldest:
+            print(f"📅 Comando mais antigo: {oldest['first_seen']}")
+
+        cursor.execute("""
+            SELECT command, last_seen
+            FROM commands
+            ORDER BY last_seen DESC
+            LIMIT 1
+        """)
+        newest = cursor.fetchone()
+        if newest:
+            print(f"📅 Último comando: {newest['last_seen']}")
+
+        # Top comandos por primeira letra
+        print("\n📈 Distribuição por primeira letra (top 10):")
+        cursor.execute("""
+            SELECT UPPER(SUBSTR(command, 1, 1)) as letra,
+                   COUNT(*) as total
+            FROM commands
+            GROUP BY letra
+            ORDER BY total DESC
+            LIMIT 10
+        """)
+
+        for row in cursor.fetchall():
+            letra = row['letra'] if row['letra'] else '?'
+            print(f"   {letra}: {row['total']:,}")
+
+        # Comandos mais longos
+        print("\n📏 Comandos mais longos:")
+        cursor.execute("""
+            SELECT command, LENGTH(command) as len
+            FROM commands
+            ORDER BY len DESC
+            LIMIT 5
+        """)
+
+        for row in cursor.fetchall():
+            cmd = row['command']
+            if len(cmd) > 70:
+                cmd = cmd[:70] + "..."
+            print(f"   [{row['len']}] {cmd}")
+
+        print("\n" + "="*60 + "\n")
+
+    def export(self, output_file: str):
+        """Exporta todos os comandos para um arquivo"""
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT command FROM commands ORDER BY command")
+
+        try:
+            with open(output_file, 'w', encoding='utf-8') as f:
+                for row in cursor.fetchall():
+                    f.write(row['command'] + '\n')
+
+            print(
+                f"✓ Exportados {self.count():,} comandos para: {output_file}")
+
+        except Exception as e:
+            print(f"✗ Erro ao exportar: {e}", file=sys.stderr)
+
+    def delete_pattern(self, pattern: str) -> int:
+        """Remove comandos que contenham o padrão"""
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            DELETE FROM commands WHERE command LIKE ?
+        """, (f'%{pattern}%',))
+
+        deleted = cursor.rowcount
+        self.conn.commit()
+
+        print(f"✓ Removidos {deleted} comandos contendo: '{pattern}'")
+        return deleted
+
+    def clear_all(self):
+        """Remove TODOS os comandos (com confirmação)"""
+        response = input(
+            "⚠️  ATENÇÃO: Isso removerá TODOS os comandos. Confirma? (sim/não): ")
+
+        if response.lower() in ['sim', 's', 'yes', 'y']:
+            cursor = self.conn.cursor()
+            cursor.execute("DELETE FROM commands")
+            self.conn.commit()
+            print("✓ Todos os comandos foram removidos")
+        else:
+            print("✗ Operação cancelada")
+
+
+def main():
+    """Função principal com CLI"""
+    parser = argparse.ArgumentParser(
+        description='Gerenciador de Histórico do Bash',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Exemplos:
+  %(prog)s init                    # Inicializa e importa histórico
+  %(prog)s add "ls -la"            # Adiciona comando
+  %(prog)s search git              # Busca por 'git'
+  %(prog)s search                  # Mostra últimos 50
+  %(prog)s ls                      # Lista entradas sem ordenação
+  %(prog)s ls --limit 100          # Lista 100 entradas
+  %(prog)s last                    # Últimas 12 entradas
+  %(prog)s last --limit 20         # Últimas 20 entradas
+  %(prog)s stats                   # Estatísticas
+  %(prog)s export history.txt      # Exporta tudo
+  %(prog)s delete "senha"          # Remove comandos com 'senha'
+        """
+    )
+
+    parser.add_argument('action',
+                        choices=['init', 'add', 'search', 'ls', 'last',  # <- adiciona last
+                                 'stats', 'export', 'delete', 'clear'],
+                        help='Ação a executar')
+
+    parser.add_argument('args', nargs='*', help='Argumentos da ação')
+
+    parser.add_argument('--db', type=str, help='Caminho customizado do banco')
+    parser.add_argument('--limit', type=int, default=50,
+                        help='Limite de resultados (padrão: 50)')
+    parser.add_argument('--timestamps', '-t',
+                        action='store_true',
+                        help='Mostra timestamps nos resultados')
+
+    args = parser.parse_args()
+
+    # Inicializa o gerenciador
+    with HistoryManager(args.db) as hm:
+        hm.create_db()  # Garante que o banco existe
+
+        if args.action == 'init':
+            hm.import_history()
+
+        elif args.action == 'add':
+            if not args.args:
+                print("✗ Erro: especifique o comando a adicionar")
+                sys.exit(1)
+
+            command = ' '.join(args.args)
+            if hm.add_command(command):
+                print(f"✓ Comando adicionado: {command}")
+            else:
+                print(f"ℹ️  Comando já existe: {command}")
+
+        elif args.action == 'search':
+            query = ' '.join(args.args) if args.args else None
+
+            if args.timestamps:
+                results = hm.search_with_timestamps(query, limit=args.limit)
+
+                if results:
+                    if query:
+                        print(
+                            f"\n🔍 Resultados para '{query}' ({len(results)}):\n")
+                    else:
+                        print(f"\n📋 Últimos comandos ({len(results)}):\n")
+
+                    for timestamp, cmd in results:
+                        dt = datetime.fromisoformat(timestamp)
+                        time_str = dt.strftime("%Y-%m-%d %H:%M:%S")
+                        print(f"  [{time_str}] {cmd}")
+                    print()
+                else:
+                    print("✗ Nenhum resultado encontrado")
+
+            else:
+                results = hm.search(query, limit=args.limit)
+
+                if results:
+                    if query:
+                        print(
+                            f"\n🔍 Resultados para '{query}' ({len(results)}):\n")
+                    else:
+                        print(f"\n📋 Últimos comandos ({len(results)}):\n")
+
+                    for cmd in results:
+                        print(f"  {cmd}")
+                    print()
+                else:
+                    print("✗ Nenhum resultado encontrado")
+
+        elif args.action == 'ls':
+            results = hm.list_commands(limit=args.limit)
+
+            if results:
+                print(f"\n📋 Últimos comandos adicionados ({len(results)}):\n")
+                for timestamp, cmd in results:
+                    # Formata timestamp de forma mais legível
+                    dt = datetime.fromisoformat(timestamp)
+                    time_str = dt.strftime("%Y-%m-%d %H:%M:%S")
+                    print(f"  [{time_str}] {cmd}")
+                print()
+            else:
+                print("✗ Banco vazio")
+
+        elif args.action == 'last':
+            limit = args.limit if args.limit != 50 else 12  # padrão 12 pro last
+            results = hm.list_commands(limit=limit)
+
+            if results:
+                print(f"\n📋 Últimas {len(results)} entradas:\n")
+                for _, cmd in results:
+                    print(f"  {cmd}")
+                print()
+            else:
+                print("✗ Banco vazio")
+
+        elif args.action == 'stats':
+            hm.stats()
+
+        elif args.action == 'export':
+            if not args.args:
+                print("✗ Erro: especifique o arquivo de saída")
+                sys.exit(1)
+
+            hm.export(args.args[0])
+
+        elif args.action == 'delete':
+            if not args.args:
+                print("✗ Erro: especifique o padrão a deletar")
+                sys.exit(1)
+
+            pattern = ' '.join(args.args)
+            hm.delete_pattern(pattern)
+
+        elif args.action == 'clear':
+            hm.clear_all()
+
+
+if __name__ == '__main__':
+    main()
