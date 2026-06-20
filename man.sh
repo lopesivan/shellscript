@@ -11,7 +11,7 @@ export MANPAGER='NVIM_APPNAME=nvim-pde nvim +Man!'
 
 # No bold/underline/etc
 function man {
-	eval "command man \"$@\" | $MANPAGER"
+    eval "command man \"$@\" | $MANPAGER"
 }
 # DEBUG ON
 [ $SCRIPT_DEBUG_ON ] && echo load file: man.sh
