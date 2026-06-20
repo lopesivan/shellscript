@@ -29,18 +29,22 @@ export ANDROID_HOME=$ANDROID_HOME
 # -----------------------------------
 # Android ADB keyevent helper
 # -----------------------------------
+# -s 192.168.2.100:5555
+#ADB_DEVICE=192.168.2.100:5555
+
+# export ADB_DEVICE=192.168.2.100:5555
 
 adb-key() {
+    local adb_args=""
+    [ -n "${ADB_DEVICE:-}" ] && adb_args="-s $ADB_DEVICE"
     local key="$1"
     local repeat="${2:-1}"
     local delay="${3:-0.08}"
-
-    for ((i = 1; i <= repeat; i++)); do
-        adb shell input keyevent "$key"
-
-        if [ "$i" -lt "$repeat" ]; then
-            sleep "$delay"
-        fi
+    local i=1
+    while [ "$i" -le "$repeat" ]; do
+        adb $adb_args shell input keyevent "$key"
+        i=$((i + 1))
+        [ "$i" -le "$repeat" ] && sleep "$delay"
     done
 }
 
