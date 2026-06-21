@@ -48,6 +48,18 @@ adb-key() {
     done
 }
 
+adb-send() {
+    local adb_args=""
+    [ -n "${ADB_DEVICE:-}" ] && adb_args="-s $ADB_DEVICE"
+
+    local text="$*"
+    for word in $text; do
+        adb $adb_args shell input text "$word"
+        adb $adb_args shell input keyevent KEYCODE_SPACE
+    done
+    adb $adb_args shell input keyevent KEYCODE_BACKSPACE # remove espaço final
+    adb $adb_args shell input keyevent KEYCODE_ENTER
+}
 # -----------------------------------
 # Android ADB shortcuts
 # uso: adb-down 5
