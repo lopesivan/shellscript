@@ -13,8 +13,12 @@ echo "Python versão $python_version está ativa"
 # 	eval "$(pyenv virtualenv-init - bash)"
 # fi
 
+# argos:
+alias en2pt='PYENV_VERSION=argos argos-translate -f en -t pb'
+alias pt2en='PYENV_VERSION=argos argos-translate -f pb -t en'
+
 # DEBUG ON
 [ $SCRIPT_DEBUG_ON ] && {
-	echo load file: pyenv.sh
-	pyenv version
+    echo load file: pyenv.sh
+    pyenv version
 }
