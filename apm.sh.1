@@ -1,0 +1,110 @@
+# Bash completion for apm (Android package Manager)
+#
+# Installation:
+#   sudo cp apm-completion.bash /etc/bash_completion.d/anm
+#   or
+#   source apm-completion.bash
+_apm_complete() {
+    local cur prev words cword
+    _init_completion || return
+
+    local commands="list activate clear profile-list profile-save profile-load profile-show profile-delete interactive status"
+
+    # função auxiliar: lista plataformas disponíveis via apm
+    _apm_platforms() {
+        apm list 2>/dev/null |
+            grep -oP 'android-[\d.]+' |
+            sort -u
+    }
+
+    # função auxiliar: lista perfis salvos via apm
+    _apm_profiles() {
+        apm profile-list 2>/dev/null |
+            grep -v '===' |
+            awk '{print $1}' |
+            grep -v '^$'
+    }
+
+    case "$prev" in
+        apm)
+            COMPREPLY=($(compgen -W "$commands" -- "$cur"))
+            return
+            ;;
+
+        activate)
+            # permite múltiplas plataformas — exclui as já digitadas
+            local platforms already word
+            platforms="$(_apm_platforms)"
+            already="${words[*]:2}"
+            for word in $already; do
+                platforms="${platforms//$word/}"
+            done
+            COMPREPLY=($(compgen -W "$platforms" -- "$cur"))
+            return
+            ;;
+
+        profile-load | profile-show | profile-delete)
+            COMPREPLY=($(compgen -W "$(_apm_profiles)" -- "$cur"))
+            return
+            ;;
+
+        profile-save)
+            # primeiro arg após profile-save é o nome do perfil (livre)
+            # a partir do segundo arg são plataformas
+            if [[ "${#words[@]}" -eq 3 ]]; then
+                # ainda digitando o nome do perfil
+                COMPREPLY=()
+            else
+                COMPREPLY=($(compgen -W "$(_apm_platforms)" -- "$cur"))
+            fi
+            return
+            ;;
+    esac
+
+    # se já temos um comando mas o prev não é apm nem um comando conhecido,
+    # verifica o comando real (words[1]) para suporte a múltiplos argumentos
+    local cmd="${words[1]}"
+    case "$cmd" in
+        activate)
+            local platforms already word
+            platforms="$(_apm_platforms)"
+            already="${words[*]:2}"
+            for word in $already; do
+                platforms="${platforms//$word/}"
+            done
+            COMPREPLY=($(compgen -W "$platforms" -- "$cur"))
+            return
+            ;;
+
+        profile-save)
+            if [[ "${#words[@]}" -eq 3 ]]; then
+                COMPREPLY=()
+            else
+                COMPREPLY=($(compgen -W "$(_apm_platforms)" -- "$cur"))
+            fi
+            return
+            ;;
+    esac
+
+    COMPREPLY=($(compgen -W "$commands" -- "$cur"))
+}
+
+complete -F _apm_complete apm
+
+#   Para ativar, adicione no seu `~/.bashrc`:
+#
+#   ```bash
+#   source /path/to/apm-completion.bash
+#   ```
+#
+#   O que o completion cobre:
+#
+#   | situação | comportamento |
+#   |---|---|
+#   | `apm <TAB>` | lista todos os comandos |
+#   | `apm activate <TAB>` | lista plataformas disponíveis |
+#   | `apm activate android-28 <TAB>` | lista plataformas restantes (exclui já digitadas) |
+#   | `apm profile-load <TAB>` | lista perfis salvos |
+#   | `apm profile-show <TAB>` | lista perfis salvos |
+#   | `apm profile-delete <TAB>` | lista perfis salvos |
+#   | `apm profile-save myprofile <TAB>` | lista plataformas após o nome |
