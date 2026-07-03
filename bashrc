@@ -160,9 +160,10 @@ if [[ "$isbrew" == "true" ]]; then
         env.sh
         funcoeszz.sh
         fzf.sh
-        git.sh
-        git_server_api.sh
-        git_tools.sh
+        #git.sh
+        #git_server_api.sh
+        #git_tools.sh
+        starship.sh
         goenv.sh
         iprj.sh
         jenv.sh
