@@ -2,7 +2,6 @@ NVIM=$(command -v nvim)
 NANO=$(command -v nano)
 
 [[ $NVIM ]] && {
-    alias e=envim.sh
     alias vim=nvim.sh
     alias n=nvim-nova.sh
     alias v="vim"
