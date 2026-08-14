@@ -39,6 +39,8 @@ alias game='/usr/games/mednafen'
 alias slide="PYENV_VERSION=3.6.15 lookatme -e file_loader"
 # alias nf='iprj new file --list'
 
+alias lynx-url="lynx -dump -listonly"
+
 alias rec='arecord -c 1 -r 48000 -f S16_LE -D "hw:CARD=Loopback,DEV=1,SUBDEV=0"'
 #alias mic.server='sudo micclient-ubuntu-x86_64 -t wifi 192.168.2.104'
 alias ei3="v -c'0' -c'map ? :qall!<CR>' -c'map q :qall!<CR>' ~/.config/i3/config"
@@ -73,6 +75,8 @@ alias goraspbian='GOOS=linux GOARCH=arm GOARM=7 go'
 alias rb='ruby'
 alias py='python'
 alias ipy='ipython'
+alias emacs='emacs -nw'
+alias e='emacs -nw'
 
 # Godot
 alias godot='/usr/local/bin/godot --rendering-driver opengl3'
