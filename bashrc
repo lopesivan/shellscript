@@ -15,7 +15,7 @@ HISTCONTROL=ignoreboth
 
 ## append to the history file, don't overwrite it
 shopt -s histappend
-PROMPT_COMMAND="history -a; history -n"
+#PROMPT_COMMAND="history -a; history -n"
 
 ## for setting history length see HISTSIZE and HISTFILESIZE in bash(1)
 HISTSIZE=50000
@@ -149,21 +149,22 @@ if [[ "$isbrew" == "true" ]]; then
     # SCRIPT_DEBUG_ON=1
     #conda.sh
     sources=(
-        android.sh
         alias.sh
-        awx.sh
-        apm.sh
+        android.sh
         anm.sh
+        apm.sh
+        awx.sh
         bangsh.sh
+        boom.sh
         dotnet.sh
         editor.sh
+        emsdk.sh
         env.sh
         funcoeszz.sh
         fzf.sh
-        #git.sh
         #git_server_api.sh
+        #git.sh
         #git_tools.sh
-        starship.sh
         goenv.sh
         iprj.sh
         jenv.sh
@@ -180,6 +181,7 @@ if [[ "$isbrew" == "true" ]]; then
         rbenv.sh
         redis.sh
         rustup.sh
+        starship.sh
         tdl.sh
         tp.sh
         wd.sh
@@ -205,3 +207,11 @@ echo .bashrc
 export PATH="$PATH:/home/ivan/.local/bin"
 # load deno
 . "/home/ivan/.deno/env"
+
+# BEGIN opam configuration
+# This is useful if you're using opam as it adds:
+#   - the correct directories to the PATH
+#   - auto-completion for the opam binary
+# This section can be safely removed at any time if needed.
+test -r '/home/ivan/.opam/opam-init/init.sh' && . '/home/ivan/.opam/opam-init/init.sh' >/dev/null 2>/dev/null || true
+# END opam configuration
